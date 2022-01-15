@@ -239,6 +239,77 @@ class TSSegmentPolicy(Policy):
                     break
         return
 
+# Segment-based Thompson Sampling strategy, with Beta(alpha_zero,beta_zero) priors
+class TSSegmentPlaylistPolicy(Policy):
+    #playlist_groups - array of group labels (cluster) for playlists
+    def __init__(self, user_segment, n_playlists, playlist_groups, alpha_zero=1, beta_zero=99, cascade_model=True):
+        self.user_segment = user_segment
+        self.playlist_groups = playlist_groups
+        n_groups = len(np.unique(self.playlist_groups))
+        self.playlist_group_to_specific = np.empty(n_groups, dtype=np.object)
+        for i in range(self.playlist_group_to_specific.shape[0]):
+            self.playlist_group_to_specific[i] = set()
+        for i, val in enumerate(playlist_groups):
+            self.playlist_group_to_specific[val].add(i)
+        n_segments = len(np.unique(self.user_segment))
+        self.n_segments = n_segments
+        self.playlist_display = np.zeros((n_segments, n_playlists))
+        self.playlist_success = np.zeros((n_segments, n_playlists))
+        self.playlist_group_display = np.zeros((n_segments, n_groups))
+        self.playlist_group_success = np.zeros((n_segments, n_groups))
+        self.alpha_zero = alpha_zero
+        self.beta_zero = beta_zero
+        self.t = 0
+        self.cascade_model = cascade_model
+
+
+    def recommend_to_users_batch(self, batch_users, n_recos=12, l_init=3):
+        user_segment = np.take(self.user_segment, batch_users)
+        user_displays = np.take(self.playlist_display, user_segment, axis = 0).astype(float)
+        user_success = np.take(self.playlist_success, user_segment, axis = 0)
+        user_group_displays = np.take(self.playlist_group_display, user_segment, axis=0).astype(float)
+        user_group_success = np.take(self.playlist_group_success, user_segment, axis=0)
+        user_score = np.random.beta(self.alpha_zero+user_success, self.beta_zero+user_displays - user_success)
+        user_group_score = np.random.beta(self.alpha_zero+user_group_success, self.beta_zero+user_group_displays - user_group_success)
+        user_group_choice = np.argsort(-user_group_score)[:, :n_recos]
+        #n_recos_single = n_recos*
+        user_choice = np.argsort(-user_score)#[:, :n_recos_single]
+        #f = lambda x: self.playlist_group_to_specific[x]
+        #vfunc = np.vectorize(f)
+        #self.vfunc(user_group_choice)
+        result = np.ndarray(shape=(user_segment.shape[0], n_recos), dtype=int)
+        for i in range(user_segment.shape[0]):
+            for ind, group_choice in enumerate(user_group_choice[i]):
+                specific_playlists = self.playlist_group_to_specific[group_choice]
+                found = False
+                for rec in user_choice[i]:
+                    if rec in specific_playlists:
+                        result[i][ind] = rec
+                        found = True
+                        break
+                if not found:
+                    result[i][ind] = user_choice[i][ind]
+        # Shuffle l_init first slots
+        np.random.shuffle(user_choice[0:l_init])
+        return result
+
+    def update_policy(self, user_ids, recos , rewards, l_init = 3):
+        batch_size = len(user_ids)
+        for i in range(batch_size):
+            user_segment = self.user_segment[user_ids[i]]
+            total_stream = len(rewards[i].nonzero())
+            nb_display = 0
+            for p, r in zip(recos[i], rewards[i]):
+                playlist_group = self.playlist_groups[p]
+                nb_display += 1
+                self.playlist_group_success[user_segment][playlist_group] += r
+                self.playlist_group_display[user_segment][playlist_group] += 1
+                self.playlist_success[user_segment][p] += r
+                self.playlist_display[user_segment][p] += 1
+                if self.cascade_model and ((total_stream == 0 and nb_display == l_init) or (r == 1)):
+                    break
+        return
+
 
 # Linear Thompson Sampling strategy for fully personalized contextual bandits, as in [Chapelle and Li, 2011]
 class LinearTSPolicy(Policy):

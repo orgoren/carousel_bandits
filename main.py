@@ -1,14 +1,15 @@
 from environment import ContextualEnvironment
-from policies import KLUCBSegmentPolicy, RandomPolicy, ExploreThenCommitSegmentPolicy, EpsilonGreedySegmentPolicy, TSSegmentPolicy, LinearTSPolicy
+from policies import KLUCBSegmentPolicy, RandomPolicy, ExploreThenCommitSegmentPolicy, EpsilonGreedySegmentPolicy, TSSegmentPolicy, LinearTSPolicy, TSSegmentPlaylistPolicy
 import argparse
 import json
 import logging
 import numpy as np
 import pandas as pd
 import time
+from cluster_playlists import PlaylistClusterer
 
 # List of implemented policies
-def set_policies(policies_name, user_segment, user_features, n_playlists):
+def set_policies(policies_name, user_segment, user_features, n_playlists, playlist_groups):
     # Please see section 3.3 of RecSys paper for a description of policies
     POLICIES_SETTINGS = {
         'random' : RandomPolicy(n_playlists),
@@ -19,6 +20,8 @@ def set_policies(policies_name, user_segment, user_features, n_playlists):
         'kl-ucb-seg' : KLUCBSegmentPolicy(user_segment, n_playlists, cascade_model = True),
         'ts-seg-naive' : TSSegmentPolicy(user_segment, n_playlists, alpha_zero = 1, beta_zero = 1, cascade_model = True),
         'ts-seg-pessimistic' : TSSegmentPolicy(user_segment, n_playlists, alpha_zero = 1, beta_zero = 99, cascade_model = True),
+        'ts-seg-very-pessimistic': TSSegmentPolicy(user_segment, n_playlists, alpha_zero=1, beta_zero=500, cascade_model=True),
+        'ts-seg-very-pessimistic-20': TSSegmentPlaylistPolicy(user_segment, n_playlists, playlist_groups, alpha_zero=1, beta_zero=500,cascade_model=True),
         'ts-lin-naive' : LinearTSPolicy(user_features, n_playlists, bias = 0.0, cascade_model = True),
         'ts-lin-pessimistic' : LinearTSPolicy(user_features, n_playlists, bias = -5.0, cascade_model = True),
         # Versions of epsilon-greedy-explore and ts-seg-pessimistic WITHOUT cascade model
@@ -80,6 +83,9 @@ if __name__ == "__main__":
     user_features = np.concatenate([user_features, np.ones((n_users,1))], axis = 1)
     playlist_features = np.array(playlists_df)
 
+    clusterer = PlaylistClusterer(args.playlists_path)
+    playlist_groups = clusterer.cluster(100)
+
     user_segment = np.array(users_df.segment)
 
     logger.info("SETTING UP SIMULATION ENVIRONMENT")
@@ -91,7 +97,7 @@ if __name__ == "__main__":
     logger.info("Policies to evaluate: %s \n \n" % (args.policies))
 
     policies_name = args.policies.split(",")
-    policies = set_policies(policies_name, user_segment, user_features, n_playlists)
+    policies = set_policies(policies_name, user_segment, user_features, n_playlists, playlist_groups)
     n_policies = len(policies)
     n_users_per_round = args.n_users_per_round
     n_rounds = args.n_rounds
