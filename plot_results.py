@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 sns.set_style(style='darkgrid')
-
+import re
 
 # Plots the evolution of expected cumulative regrets curves,
 # for all tested policies and over all rounds
@@ -20,6 +20,11 @@ if __name__ == "__main__":
         cumulative_regrets = json.load(fp)
 
     for k,v in cumulative_regrets.items():
+        n = re.findall("(\d+)", k)
+        if len(n) > 0:
+            k = n[0]
+        else:
+            k = "-"
         sns.lineplot(data = np.array(v), label=k)
     plt.xlabel("Round")
     plt.ylabel("Cumulative Regret")

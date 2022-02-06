@@ -42,7 +42,7 @@ class PlaylistClusterer:
         plt.legend()
         plt.show()
 
-    def cluster(self, k=10):
+    def cluster(self, k=10, debug=False):
 
         # Load Data
         data = self.features
@@ -57,9 +57,10 @@ class PlaylistClusterer:
         # Getting unique labels
         u_labels = np.unique(label)
 
-        # number of results per group:
-        for i in u_labels:
-            print(f"For cluster {i}, size {len(data[label == i])}")
+        if debug:
+            # number of results per group:
+            for i in u_labels:
+                print(f"For cluster {i}, size {len(data[label == i])}")
         return label
 
 
@@ -72,4 +73,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     clusterer = PlaylistClusterer(args.playlists_path)
-    clusterer.cluster(args.num_clusters)
+
+    scores = []
+
+    for i in range(20,400,3):
+        print(f"clustering {i}")
+        label = clusterer.cluster(i)
+        #print(f"Score for {i} is {score}")
+        scores.append(i)
+
+    plt.plot(scores)
+    plt.show()
+    print("hi")
+
+
+
+    #clusterer.cluster(args.num_clusters)
