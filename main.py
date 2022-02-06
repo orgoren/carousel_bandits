@@ -9,7 +9,7 @@ import time
 from cluster_playlists import PlaylistClusterer
 
 # List of implemented policies
-def set_policies(policies_name, user_segment, user_features, n_playlists, playlist_groups):
+def set_policies(policies_name, user_segment, user_features, n_playlists, playlist_groups, playlist_groups_only_big):
     # Please see section 3.3 of RecSys paper for a description of policies
     POLICIES_SETTINGS = {
         'random' : RandomPolicy(n_playlists),
@@ -21,7 +21,9 @@ def set_policies(policies_name, user_segment, user_features, n_playlists, playli
         'ts-seg-naive' : TSSegmentPolicy(user_segment, n_playlists, alpha_zero = 1, beta_zero = 1, cascade_model = True),
         'ts-seg-pessimistic' : TSSegmentPolicy(user_segment, n_playlists, alpha_zero = 1, beta_zero = 99, cascade_model = True),
         'ts-seg-very-pessimistic': TSSegmentPolicy(user_segment, n_playlists, alpha_zero=1, beta_zero=500, cascade_model=True),
-        'ts-seg-very-pessimistic-20': TSSegmentPlaylistPolicy(user_segment, n_playlists, playlist_groups, alpha_zero=1, beta_zero=500,cascade_model=True),
+        'ts-seg-very-pessimistic-130': TSSegmentPlaylistPolicy(user_segment, n_playlists, playlist_groups, alpha_zero=1, beta_zero=500,cascade_model=True),
+        'ts-seg-very-pessimistic-130-big': TSSegmentPlaylistPolicy(user_segment, n_playlists, playlist_groups_only_big, alpha_zero=1,
+                                                               beta_zero=500, cascade_model=True),
         'ts-lin-naive' : LinearTSPolicy(user_features, n_playlists, bias = 0.0, cascade_model = True),
         'ts-lin-pessimistic' : LinearTSPolicy(user_features, n_playlists, bias = -5.0, cascade_model = True),
         # Versions of epsilon-greedy-explore and ts-seg-pessimistic WITHOUT cascade model
@@ -84,7 +86,9 @@ if __name__ == "__main__":
     playlist_features = np.array(playlists_df)
 
     clusterer = PlaylistClusterer(args.playlists_path)
-    playlist_groups = clusterer.cluster(100)
+    playlist_groups = clusterer.cluster(130, split_small_clusters=False)
+
+    playlist_groups_only_big = clusterer.cluster(130, split_small_clusters=True)
 
     user_segment = np.array(users_df.segment)
 
@@ -97,7 +101,7 @@ if __name__ == "__main__":
     logger.info("Policies to evaluate: %s \n \n" % (args.policies))
 
     policies_name = args.policies.split(",")
-    policies = set_policies(policies_name, user_segment, user_features, n_playlists, playlist_groups)
+    policies = set_policies(policies_name, user_segment, user_features, n_playlists, playlist_groups, playlist_groups_only_big)
     n_policies = len(policies)
     n_users_per_round = args.n_users_per_round
     n_rounds = args.n_rounds
