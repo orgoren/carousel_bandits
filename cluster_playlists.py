@@ -42,11 +42,12 @@ class PlaylistClusterer:
         plt.legend()
         plt.show()
 
-    def cluster(self, k=10, debug=False):
+
+    def cluster(self, k=10, split_small_clusters=False):
 
         # Load Data
         data = self.features
-
+        small_threshold = 3
 
         # Initialize the class object
         kmeans = KMeans(n_clusters=k)
@@ -57,10 +58,21 @@ class PlaylistClusterer:
         # Getting unique labels
         u_labels = np.unique(label)
 
-        if debug:
-            # number of results per group:
-            for i in u_labels:
-                print(f"For cluster {i}, size {len(data[label == i])}")
+        small_cluster_labels = set()
+        highest_k = k
+        # number of results per group:
+        for i in u_labels:
+            print(f"For cluster {i}, size {len(data[label == i])}")
+            if len(data[label == i]) < small_threshold:
+                small_cluster_labels.add(i)
+        if split_small_clusters:
+            print(f"Got {len(small_cluster_labels)} small clusters and {k-len(small_cluster_labels)} big clusters")
+            new_label = label.copy()
+            for ind, val in enumerate(label):
+                if val in small_cluster_labels:
+                    new_label[ind] = highest_k
+                    highest_k += 1
+            print(f"Number of clusters is now {highest_k}")
         return label
 
 
