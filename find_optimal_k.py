@@ -19,13 +19,15 @@ def get_cluster_sse_results(kmeans_model, res_file, kmax=400, split_small_cluste
     with open(res_file, "w") as f:
         json.dump(wss, f)
 
-def plot_graph(res, title):
+def plot_graph(res, title, xlabel, ylabel):
     print(title)
     for i, s in enumerate(res):
         print(f"{i} : {s}")
     plt.title(title)
-    plt.plot(res)
-    plt.show()
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.plot([i*10 for i in range(len(res))], res)
+    plt.savefig(f"{title}.jpg")
 
 def show_results(res_file):
     with open(res_file) as f:
@@ -33,8 +35,8 @@ def show_results(res_file):
 
     incs = [res[i+1]-res[i] for i in range(len(res[:-1]))]
 
-    plot_graph(res, "WSS")
-    plot_graph(incs, "incs")
+    #plot_graph(res, "WSS", xlabel="#clusters", ylabel="WSS Score")
+    plot_graph(incs, "inclines", xlabel="#clusters", ylabel="WSS graph inclines")
 
 
 def main():

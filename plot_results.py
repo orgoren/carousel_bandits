@@ -28,4 +28,5 @@ if __name__ == "__main__":
         sns.lineplot(data = np.array(v), label=k)
     plt.xlabel("Round")
     plt.ylabel("Cumulative Regret")
-    plt.show()
+    plt.savefig("results.jpg")
+    #plt.show()
