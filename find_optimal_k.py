@@ -3,46 +3,48 @@ import pandas as pd
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import json
-def calculate_WSS(points, kmax):
-    sse = []
-    for k in range(1, kmax+1, 10):
-        print(f"k={k}")
-        kmeans = KMeans(n_clusters=k).fit(points)
-        centroids = kmeans.cluster_centers_
-        pred_clusters = kmeans.predict(points)
-        curr_sse = 0
+from cluster_playlists import PlaylistClusterer
 
-        for i in range(len(points)):
-            curr_center = centroids[pred_clusters[i]]
-            curr_sse += np.linalg.norm(points[i]-curr_center, ord=2)
-        sse.append(curr_sse)
-        with open("sse.json", "w") as f:
-            json.dump(sse, f)
+def calculate_WSS(kmeans_model : PlaylistClusterer, kmax, split_small_clusters, initial=10, interval=10):
+    wss = []
+    for k in range(initial, kmax+1, interval):
+        kmeans_model.cluster(k, split_small_clusters)
+        print(f"working on k={k} #centriods={kmeans_model.centroids.shape[0]}")
+        wss.append(kmeans_model.get_sse_score())
+    return wss
 
-    plt.show(sse)
 
-def main():
-    #points_df = pd.read_csv("data/user_features.csv")
-    #points = np.array(points_df)
-    #calculate_WSS(points, 400)
+def get_cluster_sse_results(kmeans_model, res_file, kmax=400, split_small_clusters=False, initial=10, interval=10):
+    wss = calculate_WSS(kmeans_model, kmax, split_small_clusters=split_small_clusters, initial=initial, interval=interval)
+    with open(res_file, "w") as f:
+        json.dump(wss, f)
 
-    with open("sse.json") as f:
-        sse = json.load(f)
-
-    for i, s in enumerate(sse):
+def plot_graph(res, title):
+    print(title)
+    for i, s in enumerate(res):
         print(f"{i} : {s}")
-
-    plt.plot(sse)
+    plt.title(title)
+    plt.plot(res)
     plt.show()
 
-    #a = np.argsort(sse)
+def show_results(res_file):
+    with open(res_file) as f:
+        res = json.load(f)
 
-    #b = 5
+    incs = [res[i+1]-res[i] for i in range(len(res[:-1]))]
+
+    plot_graph(res, "WSS")
+    plot_graph(incs, "incs")
 
 
+def main():
+    #kmeans_model = PlaylistClusterer("data/playlist_features.csv")
+    #get_cluster_sse_results(kmeans_model, res_file="sse_big_clusters.json", kmax=400, split_small_clusters=True, initial=10, interval=10)
 
+    show_results("sse_big_clusters.json")
+    #get_cluster_sse_results(kmeans_model, res_file="sse_reg.json", kmax=400, split_small_clusters=False, initial=10, interval=10)
+    #show_results("sse_reg.json")
 
-    pass
 
 if __name__ == "__main__":
     main()
