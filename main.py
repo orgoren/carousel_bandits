@@ -9,7 +9,7 @@ import time
 from cluster_playlists import PlaylistClusterer
 
 # List of implemented policies
-def set_policies(policies_name, user_segment, user_features, n_playlists, playlist_groups, playlist_groups_options, playlist_groups_only_big):
+def set_policies(policies_name, user_segment, user_features, n_playlists, clusterer):
 
     # Please see section 3.3 of RecSys paper for a description of policies
     POLICIES_SETTINGS = {
@@ -22,21 +22,14 @@ def set_policies(policies_name, user_segment, user_features, n_playlists, playli
         'ts-seg-naive' : TSSegmentPolicy(user_segment, n_playlists, alpha_zero = 1, beta_zero = 1, cascade_model = True),
         'ts-seg-pessimistic' : TSSegmentPolicy(user_segment, n_playlists, alpha_zero = 1, beta_zero = 99, cascade_model = True),
         'ts-seg-very-pessimistic': TSSegmentPolicy(user_segment, n_playlists, alpha_zero=1, beta_zero=500, cascade_model=True),
-        'ts_seg_very_pessimistic_exp4' : TSSegmentPlaylistEXP4Policy(user_segment, n_playlists, playlist_groups_options, alpha_zero=1, beta_zero=500,cascade_model=True),
-        #'ts-seg-very-pessimistic-20': TSSegmentPlaylistPolicy(user_segment, n_playlists, playlist_groups, alpha_zero=1, beta_zero=500,cascade_model=True),
-        'ts-seg-very-pessimistic-130': TSSegmentPlaylistPolicy(user_segment, n_playlists, playlist_groups, alpha_zero=1, beta_zero=500,cascade_model=True),
-        'ts-seg-very-pessimistic-130-big': TSSegmentPlaylistPolicy(user_segment, n_playlists, playlist_groups_only_big, alpha_zero=1,
-                                                               beta_zero=500, cascade_model=True),
+        'ts-seg-very-pessimistic-130': TSSegmentPlaylistPolicy(user_segment, n_playlists, clusterer, 130, split_small_clusters=False, alpha_zero=1, beta_zero=500,cascade_model=True),
+        'ts-seg-very-pessimistic-130-big': TSSegmentPlaylistPolicy(user_segment, n_playlists, clusterer, 130, split_small_clusters=True, alpha_zero=1, beta_zero=500, cascade_model=True),
         'ts-lin-naive' : LinearTSPolicy(user_features, n_playlists, bias = 0.0, cascade_model = True),
         'ts-lin-pessimistic' : LinearTSPolicy(user_features, n_playlists, bias = -5.0, cascade_model = True),
         # Versions of epsilon-greedy-explore and ts-seg-pessimistic WITHOUT cascade model
         'epsilon-greedy-explore-no-cascade' : EpsilonGreedySegmentPolicy(user_segment, n_playlists, epsilon = 0.1, cascade_model = False),
         'ts-seg-pessimistic-no-cascade' : TSSegmentPolicy(user_segment, n_playlists, alpha_zero = 1, beta_zero = 99, cascade_model = False)
     }
-
-    for group_option in playlist_groups_options:
-        group_name = f"ts-seg-very-pessimistic-{group_option}"
-        POLICIES_SETTINGS[group_name] = TSSegmentPlaylistPolicy(user_segment, n_playlists, playlist_groups_options[group_option], alpha_zero=1, beta_zero=500,cascade_model=True)
 
     return [POLICIES_SETTINGS[name] for name in policies_name]
 
@@ -52,7 +45,7 @@ if __name__ == "__main__":
                         help = "Path to playlist features file")
     parser.add_argument("--output_path", type = str, default = "results.json", required = False,
                         help = "Path to json file to save regret values")
-    parser.add_argument("--policies", type = str, default = "ts-seg-pessimistic,ts-seg-naive,ts-seg-very-pessimistic", required = False,
+    parser.add_argument("--policies", type = str, default = "ts-seg-pessimistic,ts-seg-naive,ts-seg-very-pessimistic,ts-seg-very-pessimistic-130,ts-seg-very-pessimistic-130-big", required = False,
                         help = "Bandit algorithms to evaluate, separated by commas")
     parser.add_argument("--n_recos", type = int, default = 12, required = False,
                         help = "Number of slots L in the carousel i.e. number of recommendations to provide")
@@ -75,7 +68,6 @@ if __name__ == "__main__":
 
 
     # Data Loading and Preprocessing steps
-
     logger.info("LOADING DATA")
     logger.info("Loading playlist data")
     playlists_df = pd.read_csv(args.playlists_path)
@@ -94,16 +86,6 @@ if __name__ == "__main__":
 
     clusterer = PlaylistClusterer(args.playlists_path)
 
-    playlist_groups_options = {}
-    for option in [100,110,120,130,140, 150, 160, 170, 180, 190, 200, 250, 300, 350, 400]:
-        playlist_groups_options[option] = clusterer.cluster(option)
-        args.policies += f",ts-seg-very-pessimistic-{option}"
-
-    playlist_groups = clusterer.cluster(130, split_small_clusters=False)
-
-    playlist_groups_only_big = clusterer.cluster(130, split_small_clusters=True)
-
-
     user_segment = np.array(users_df.segment)
 
     logger.info("SETTING UP SIMULATION ENVIRONMENT")
@@ -115,7 +97,7 @@ if __name__ == "__main__":
     logger.info("Policies to evaluate: %s \n \n" % (args.policies))
 
     policies_name = args.policies.split(",")
-    policies = set_policies(policies_name, user_segment, user_features, n_playlists, playlist_groups, playlist_groups_options, playlist_groups_only_big)
+    policies = set_policies(policies_name, user_segment, user_features, n_playlists, clusterer)
     n_policies = len(policies)
     n_users_per_round = args.n_users_per_round
     n_rounds = args.n_rounds

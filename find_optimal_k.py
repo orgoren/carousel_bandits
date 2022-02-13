@@ -8,9 +8,9 @@ from cluster_playlists import PlaylistClusterer
 def calculate_WSS(kmeans_model : PlaylistClusterer, kmax, split_small_clusters, initial=10, interval=10):
     wss = []
     for k in range(initial, kmax+1, interval):
-        kmeans_model.cluster(k, split_small_clusters)
-        print(f"working on k={k} #centriods={kmeans_model.centroids.shape[0]}")
-        wss.append(kmeans_model.get_sse_score())
+        labels, centroids = kmeans_model.cluster(k, split_small_clusters)
+        print(f"working on k={k} #centriods={centroids.shape[0]}")
+        wss.append(kmeans_model.get_sse_score(centroids, labels))
     return wss
 
 
@@ -35,7 +35,7 @@ def show_results(res_file):
 
     incs = [res[i+1]-res[i] for i in range(len(res[:-1]))]
 
-    #plot_graph(res, "WSS", xlabel="#clusters", ylabel="WSS Score")
+    plot_graph(res, "WSS", xlabel="#clusters", ylabel="WSS Score")
     plot_graph(incs, "inclines", xlabel="#clusters", ylabel="WSS graph inclines")
 
 

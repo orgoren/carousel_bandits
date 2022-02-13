@@ -407,14 +407,16 @@ class TSSegmentPlaylistEXP4Policy(Policy):
 # Segment-based Thompson Sampling strategy, with Beta(alpha_zero,beta_zero) priors
 class TSSegmentPlaylistPolicy(Policy):
     #playlist_groups - array of group labels (cluster) for playlists
-    def __init__(self, user_segment, n_playlists, playlist_groups, alpha_zero=1, beta_zero=99, cascade_model=True):
+    #def __init__(self, user_segment, n_playlists, playlist_groups, alpha_zero=1, beta_zero=99, cascade_model=True):
+    def __init__(self, user_segment, n_playlists, clusterer, n_groups, split_small_clusters=False, alpha_zero=1, beta_zero=99, cascade_model=True):
         self.user_segment = user_segment
-        self.playlist_groups = playlist_groups
+        self.playlist_groups, _ = clusterer.cluster(n_groups, split_small_clusters=split_small_clusters)
         n_groups = len(np.unique(self.playlist_groups))
+        #n_groups = np.max(self.playlist_groups) + 1
         self.playlist_group_to_specific = np.empty(n_groups, dtype=np.object)
         for i in range(self.playlist_group_to_specific.shape[0]):
             self.playlist_group_to_specific[i] = set()
-        for i, val in enumerate(playlist_groups):
+        for i, val in enumerate(self.playlist_groups):
             self.playlist_group_to_specific[val].add(i)
         n_segments = len(np.unique(self.user_segment))
         self.n_segments = n_segments
