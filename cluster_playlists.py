@@ -72,18 +72,19 @@ class PlaylistClusterer:
         highest_k = k
         # number of results per group:
         for i in u_labels:
-            print(f"For cluster {i}, size {len(data[label == i])}")
+            #print(f"For cluster {i}, size {len(data[label == i])}")
             if len(data[label == i]) < small_threshold:
                 small_cluster_labels.add(i)
-        if split_small_clusters:
-            print(f"Got {len(small_cluster_labels)} small clusters and {k-len(small_cluster_labels)} big clusters")
-            new_label = label.copy()
-            for ind, val in enumerate(label):
-                if val in small_cluster_labels:
-                    new_label[ind] = highest_k
-                    centroids = np.concatenate((centroids, data[ind].reshape(1,97)),axis=0)
-                    highest_k += 1
-            print(f"Number of clusters is now {highest_k}")
+
+        # if split_small_clusters:
+        #     print(f"Got {len(small_cluster_labels)} small clusters and {k-len(small_cluster_labels)} big clusters")
+        #     new_label = label.copy()
+        #     for ind, val in enumerate(label):
+        #         if val in small_cluster_labels:
+        #             new_label[ind] = highest_k
+        #             centroids = np.concatenate((centroids, data[ind].reshape(1,97)),axis=0)
+        #             highest_k += 1
+        #     print(f"Number of clusters is now {highest_k}")
 
         return label, centroids
 

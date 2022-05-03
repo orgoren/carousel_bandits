@@ -238,179 +238,13 @@ class TSSegmentPolicy(Policy):
                     break
         return
 
-class TSSegmentPlaylistEXP4Policy(Policy):
-    def __init__(self, user_segment, n_playlists, playlist_groups_experts, alpha_zero=1, beta_zero=99, cascade_model=True):
-        self.user_segment = user_segment
-        self.experts = playlist_groups_experts
-        self.n_segments = len(np.unique(self.user_segment))
-        self.experts_by_user_segment = {}
-        self.round_experts_selection = []
-
-        self.playlist_display = np.zeros((self.n_segments, n_playlists))
-        self.playlist_success = np.zeros((self.n_segments, n_playlists))
-
-        self.metadata = []
-        self.playlist_group_to_specific = {}
-        self.experts_playlist_group_display = {}
-        self.experts_playlist_group_success = {}
-
-        for expert in self.experts:
-            n_expert_groups = len(np.unique(self.experts[expert]))
-            self.playlist_group_to_specific[expert] = np.empty(n_expert_groups, dtype=np.object)
-            for i in range(self.playlist_group_to_specific[expert].shape[0]):
-                self.playlist_group_to_specific[expert][i] = set()
-            for i, val in enumerate(self.experts[expert]):
-                self.playlist_group_to_specific[expert][val].add(i)
-
-            self.experts_playlist_group_display[expert] = np.zeros((self.n_segments, n_expert_groups))
-            self.experts_playlist_group_success[expert] = np.zeros((self.n_segments, n_expert_groups))
-
-        self.alpha_zero = alpha_zero
-        self.beta_zero = beta_zero
-        self.t = 0
-        self.cascade_model = cascade_model
-
-    @staticmethod
-    def choose_expert(experts_user_group_score, experts_user_group_choice, user_index):
-        max_sum = -1
-        max_expert = 150
-        # for expert in experts_user_group_score:
-        #     expert_sum = np.average(experts_user_group_score[expert][user_index][experts_user_group_choice[expert][user_index]])
-        #     if expert_sum > max_sum:
-        #         max_sum = expert_sum
-        #         max_expert = expert
-        return max_expert
-
-    def recommend_to_users_batch(self, batch_users, n_recos=12, l_init=3):
-        user_segment = np.take(self.user_segment, batch_users)
-        user_displays = np.take(self.playlist_display, user_segment, axis = 0).astype(float)
-        user_success = np.take(self.playlist_success, user_segment, axis = 0)
-
-        user_score = np.random.beta(self.alpha_zero+user_success, self.beta_zero+user_displays - user_success)
-        user_choice = np.argsort(-user_score)
-
-        experts_user_group_displays = {}
-        experts_user_group_success = {}
-        experts_user_group_score = {}
-        experts_user_group_choice = {}
-        for expert in self.experts:
-            experts_user_group_displays[expert] = np.take(self.experts_playlist_group_display[expert], user_segment, axis=0).astype(float)
-            experts_user_group_success[expert] = np.take(self.experts_playlist_group_success[expert], user_segment, axis=0)
-            experts_user_group_score[expert] = np.random.beta(self.alpha_zero+experts_user_group_success[expert], self.beta_zero+experts_user_group_displays[expert] - experts_user_group_success[expert])
-            experts_user_group_choice[expert] = np.argsort(-experts_user_group_score[expert])[:, :n_recos]
-
-        result = np.ndarray(shape=(user_segment.shape[0], n_recos), dtype=int)
-
-        curr_metadata = {}
-        for i in range(user_segment.shape[0]):
-
-            expert = self.choose_expert(experts_user_group_score, experts_user_group_choice, i)
-            self.experts_by_user_segment[i] = expert
-            curr_metadata[i] = expert
-            for ind, group_choice in enumerate(experts_user_group_choice[expert][i]):
-                specific_playlists = self.playlist_group_to_specific[expert][group_choice]
-                found = False
-                for rec in user_choice[i]:
-                    if rec in specific_playlists:
-                        result[i][ind] = rec
-                        found = True
-                        break
-                if not found:
-                    result[i][ind] = user_choice[i][ind]
-
-        self.metadata.append(curr_metadata)
-
-        np.random.shuffle(result[0:l_init])
-        return result
-
-    def recommend_to_users_batch_old(self, batch_users, n_recos=12, l_init=3):
-        user_segment = np.take(self.user_segment, batch_users)
-        user_displays = np.take(self.playlist_display, user_segment, axis = 0).astype(float)
-        user_success = np.take(self.playlist_success, user_segment, axis = 0)
-
-        user_score = np.random.beta(self.alpha_zero+user_success, self.beta_zero+user_displays - user_success)
-        user_choice = np.argsort(-user_score)
-        user_score_sorted = -np.sort(-user_score)
-
-        experts_user_group_displays = {}
-        experts_user_group_success = {}
-        experts_user_group_score = {}
-        experts_user_group_choice = {}
-        for expert in self.experts:
-            experts_user_group_displays[expert] = np.take(self.experts_playlist_group_display[expert], user_segment, axis=0).astype(float)
-            experts_user_group_success[expert] = np.take(self.experts_playlist_group_success[expert], user_segment, axis=0)
-            experts_user_group_score[expert] = np.random.beta(self.alpha_zero+experts_user_group_success[expert], self.beta_zero+experts_user_group_displays[expert] - experts_user_group_success[expert])
-            experts_user_group_choice[expert] = np.argsort(-experts_user_group_score[expert])[:, :n_recos]
-
-
-        result = np.ndarray(shape=(user_segment.shape[0], n_recos), dtype=int)
-
-        # for all batch users
-        for i in range(user_segment.shape[0]):
-            # for each recommendation
-            remaining_playlists = user_choice[i]
-            for rec_i in range(n_recos):
-
-                # get experts recommendations for user
-                expert_results = {expert : {} for expert in self.experts}
-                max_expert = -1
-                max_reward = -1
-                max_playlist = -1
-                for expert in experts_user_group_choice:
-                    expert_group_choice = experts_user_group_choice[expert][i][rec_i]
-                    specific_playlists = self.playlist_group_to_specific[expert][expert_group_choice]
-
-                    for j, rec in enumerate(remaining_playlists):
-                        if rec in specific_playlists:
-                            expert_results[expert][rec] = user_score_sorted[i][j]
-                            if user_score_sorted[i][j] > max_reward:
-                                max_reward = user_score_sorted[i][j]
-                                max_expert = expert
-                                max_playlist = rec
-                            break
-                remaining_playlists = remaining_playlists[remaining_playlists != max_playlist]
-                result[i][rec_i] = max_playlist
-                self.round_experts_selection.append(max_expert)
-                self.experts_by_user_segment[user_segment[i]][max_expert] += 1
-
-        # Shuffle l_init first slots
-        np.random.shuffle(result[0:l_init])
-        return result
-
-    def update_policy(self, user_ids, recos , rewards, l_init = 3):
-
-        batch_size = len(user_ids)
-        for i in range(batch_size):
-            user_segment = self.user_segment[user_ids[i]]
-            total_stream = len(rewards[i].nonzero())
-            nb_display = 0
-            for p, r in zip(recos[i], rewards[i]):
-                nb_display += 1
-
-                # for expert in self.experts:
-                #     playlist_group = self.experts[self.round_experts_selection[]][p]
-                #     self.experts_playlist_group_success[user_segment][playlist_group] += r
-                #     self.experts_playlist_group_display[user_segment][playlist_group] += 1
-
-                #expert_of_user = self.experts_by_user_segment[user_segment]
-                for expert in self.experts:
-                    playlist_group = self.experts[expert][p]
-                    self.experts_playlist_group_success[expert][user_segment][playlist_group] += r
-                    self.experts_playlist_group_display[expert][user_segment][playlist_group] += 1
-
-                self.playlist_success[user_segment][p] += r
-                self.playlist_display[user_segment][p] += 1
-                if self.cascade_model and ((total_stream == 0 and nb_display == l_init) or (r == 1)):
-                    break
-        return
-
 # Segment-based Thompson Sampling strategy, with Beta(alpha_zero,beta_zero) priors
 class TSSegmentPlaylistPolicy(Policy):
     #playlist_groups - array of group labels (cluster) for playlists
     #def __init__(self, user_segment, n_playlists, playlist_groups, alpha_zero=1, beta_zero=99, cascade_model=True):
     def __init__(self, user_segment, n_playlists, clusterer, n_groups, split_small_clusters=False, alpha_zero=1, beta_zero=99, cascade_model=True):
         self.user_segment = user_segment
-        self.playlist_groups, _ = clusterer.cluster(n_groups, split_small_clusters=split_small_clusters)
+        self.playlist_groups = clusterer.cluster(n_groups)
         n_groups = len(np.unique(self.playlist_groups))
         #n_groups = np.max(self.playlist_groups) + 1
         self.playlist_group_to_specific = np.empty(n_groups, dtype=np.object)
@@ -476,7 +310,6 @@ class TSSegmentPlaylistPolicy(Policy):
                 if self.cascade_model and ((total_stream == 0 and nb_display == l_init) or (r == 1)):
                     break
         return
-
 
 # Linear Thompson Sampling strategy for fully personalized contextual bandits, as in [Chapelle and Li, 2011]
 class LinearTSPolicy(Policy):

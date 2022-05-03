@@ -1,12 +1,12 @@
 from environment import ContextualEnvironment
-from policies import KLUCBSegmentPolicy, RandomPolicy, ExploreThenCommitSegmentPolicy, EpsilonGreedySegmentPolicy, TSSegmentPolicy, LinearTSPolicy, TSSegmentPlaylistPolicy, TSSegmentPlaylistEXP4Policy
+from policies import KLUCBSegmentPolicy, RandomPolicy, ExploreThenCommitSegmentPolicy, EpsilonGreedySegmentPolicy, TSSegmentPolicy, LinearTSPolicy, TSSegmentPlaylistPolicy
 import argparse
 import json
 import logging
 import numpy as np
 import pandas as pd
 import time
-from cluster_playlists import PlaylistClusterer
+from bak.cluster_playlists import PlaylistClusterer
 
 # List of implemented policies
 def set_policies(policies_name, user_segment, user_features, n_playlists, clusterer):
@@ -22,8 +22,10 @@ def set_policies(policies_name, user_segment, user_features, n_playlists, cluste
         'ts-seg-naive' : TSSegmentPolicy(user_segment, n_playlists, alpha_zero = 1, beta_zero = 1, cascade_model = True),
         'ts-seg-pessimistic' : TSSegmentPolicy(user_segment, n_playlists, alpha_zero = 1, beta_zero = 99, cascade_model = True),
         'ts-seg-very-pessimistic': TSSegmentPolicy(user_segment, n_playlists, alpha_zero=1, beta_zero=500, cascade_model=True),
-        'ts-seg-very-pessimistic-130': TSSegmentPlaylistPolicy(user_segment, n_playlists, clusterer, 130, split_small_clusters=False, alpha_zero=1, beta_zero=500,cascade_model=True),
-        'ts-seg-very-pessimistic-130-big': TSSegmentPlaylistPolicy(user_segment, n_playlists, clusterer, 130, split_small_clusters=True, alpha_zero=1, beta_zero=500, cascade_model=True),
+        'ts-seg-very-pessimistic-130': TSSegmentPlaylistPolicy(user_segment, n_playlists, clusterer, 130, alpha_zero=1, beta_zero=500,cascade_model=True),
+        'ts-seg-very-pessimistic-50': TSSegmentPlaylistPolicy(user_segment, n_playlists, clusterer, 50, alpha_zero=1, beta_zero=500,cascade_model=True),
+        'ts-seg-very-pessimistic-300': TSSegmentPlaylistPolicy(user_segment, n_playlists, clusterer, 300, alpha_zero=1, beta_zero=500,cascade_model=True),
+        'ts-seg-very-pessimistic-100': TSSegmentPlaylistPolicy(user_segment, n_playlists, clusterer, 100, alpha_zero=1, beta_zero=500,cascade_model=True),
         'ts-lin-naive' : LinearTSPolicy(user_features, n_playlists, bias = 0.0, cascade_model = True),
         'ts-lin-pessimistic' : LinearTSPolicy(user_features, n_playlists, bias = -5.0, cascade_model = True),
         # Versions of epsilon-greedy-explore and ts-seg-pessimistic WITHOUT cascade model
@@ -43,9 +45,9 @@ if __name__ == "__main__":
                         help = "Path to user features file")
     parser.add_argument("--playlists_path", type = str, default = "data/playlist_features.csv", required = False,
                         help = "Path to playlist features file")
-    parser.add_argument("--output_path", type = str, default = "results.json", required = False,
+    parser.add_argument("--output_path", type = str, default = "results_new3.json", required = False,
                         help = "Path to json file to save regret values")
-    parser.add_argument("--policies", type = str, default = "ts-seg-pessimistic,ts-seg-naive,ts-seg-very-pessimistic,ts-seg-very-pessimistic-130,ts-seg-very-pessimistic-130-big", required = False,
+    parser.add_argument("--policies", type = str, default = "ts-seg-pessimistic,ts-seg-very-pessimistic,ts-seg-very-pessimistic-300,ts-seg-very-pessimistic-50,ts-seg-very-pessimistic-100,ts-seg-very-pessimistic-130", required = False,
                         help = "Bandit algorithms to evaluate, separated by commas")
     parser.add_argument("--n_recos", type = int, default = 12, required = False,
                         help = "Number of slots L in the carousel i.e. number of recommendations to provide")
@@ -96,6 +98,7 @@ if __name__ == "__main__":
     logger.info("SETTING UP POLICIES")
     logger.info("Policies to evaluate: %s \n \n" % (args.policies))
 
+
     policies_name = args.policies.split(",")
     policies = set_policies(policies_name, user_segment, user_features, n_playlists, clusterer)
     n_policies = len(policies)
@@ -110,6 +113,9 @@ if __name__ == "__main__":
     logger.info("STARTING SIMULATIONS")
     logger.info("for %d rounds, with %d users per round (randomly drawn with replacement)\n \n" % (n_rounds, n_users_per_round))
     start_time = time.time()
+
+    final_recos = np.zeros((n_policies, n_rounds, n_users_per_round, n_recos), dtype=np.int64)
+
     for i in range(n_rounds):
         # Select batch of n_users_per_round users
         user_ids = np.random.choice(range(n_users), n_users_per_round)
@@ -118,6 +124,9 @@ if __name__ == "__main__":
         for j in range(n_policies):
             # Compute n_recos recommendations
             recos = policies[j].recommend_to_users_batch(user_ids, args.n_recos, args.l_init)
+
+            final_recos[j][i] = recos
+
             # Compute rewards
             rewards = cont_env.simulate_batch_users_reward(batch_user_ids= user_ids, batch_recos=recos)
             # Update policy based on rewards
@@ -130,7 +139,11 @@ if __name__ == "__main__":
 
 
     # Save results
+    print("Saving recommendations")
+    np.save("final_recommendations.npy", final_recos)
+
+
     logger.info("Saving cumulative regrets in %s" % args.output_path)
     cumulative_regrets = {policies_name[j] : list(np.cumsum(overall_optimal_reward - overall_rewards[j])) for j in range(n_policies)}
     with open(args.output_path, 'w') as fp:
-        json.dump(cumulative_regrets, fp)
+         json.dump(cumulative_regrets, fp)
